@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 import os
 from dotenv import load_dotenv
 import plotly.express as px
+import time
 
 load_dotenv()
 
@@ -25,20 +26,28 @@ engine = create_engine(DB_URL)
 st.set_page_config(page_title="Fraud System", layout="wide")
 
 # =====================================================
+# 🔥 BACKEND WARM-UP (important)
+# =====================================================
+@st.cache_resource
+def warmup_backend():
+    try:
+        requests.get(API_URL, timeout=5)
+    except:
+        pass
+
+warmup_backend()
+
+# =====================================================
 # 🎨 GLOBAL CSS
 # =====================================================
 st.markdown("""
 <style>
-
-/* Global container */
 .global-box {
     background-color: #ffffff;
     padding: 25px;
     border-radius: 15px;
     border: 2px solid #000;
 }
-
-/* Section headers */
 .section-header {
     text-align: center;
     font-size: 26px;
@@ -48,8 +57,6 @@ st.markdown("""
     border-radius: 10px;
     margin-bottom: 20px;
 }
-
-/* KPI styling */
 [data-testid="stMetric"] {
     background-color: #f1f1f1;
     border: 2px solid #000;
@@ -57,35 +64,17 @@ st.markdown("""
     border-radius: 12px;
     text-align: center;
 }
-
-[data-testid="stMetricLabel"] {
-    justify-content: center;
-    font-weight: bold;
-}
-
-[data-testid="stMetricValue"] {
-    justify-content: center;
-}
-
-/* Graph titles */
 h3 {
     text-align: center;
     font-weight: bold;
 }
-            
-
 </style>
 """, unsafe_allow_html=True)
-
-
-
 
 # =====================================================
 # TITLE
 # =====================================================
 st.markdown('<div class="section-header">💳 Fraud Detection System</div>', unsafe_allow_html=True)
-
-
 
 # =====================================================
 # ANALYTICS
@@ -110,80 +99,33 @@ col2.metric("Fraud Cases", fraud)
 col3.metric("Fraud Rate", f"{fraud_rate:.2%}")
 
 # =====================================================
-# 📊 PLOTLY CHARTS
+# 📊 PLOTS
 # =====================================================
-
 def style_fig(fig):
     fig.update_layout(
-        
         plot_bgcolor="#f1f1f1",
         paper_bgcolor="#f1f1f1",
         margin=dict(l=20, r=20, t=40, b=20),
         font=dict(color="black"),
-        xaxis=dict(title_font=dict(size=14), showgrid=True),
-        yaxis=dict(title_font=dict(size=14), showgrid=True),
     )
     fig.update_traces(marker_line_width=1, marker_line_color="black")
     return fig
 
-# -------------------------------
-# Row 1
-# -------------------------------
 c1, c2 = st.columns(2)
 
 with c1:
     st.subheader("Fraud vs Non-Fraud")
-
     data = df["isfraud"].value_counts().reset_index()
     data.columns = ["Category", "Count"]
-
-    fig = px.bar(data, x="Category", y="Count",
-                 labels={"Category": "Transaction Type", "Count": "Number of Transactions"})
-
-    fig = style_fig(fig)
-    st.plotly_chart(fig, use_container_width=True)
+    fig = px.bar(data, x="Category", y="Count")
+    st.plotly_chart(style_fig(fig), width='stretch')
 
 with c2:
     st.subheader("Fraud by Transaction Type")
-
     type_counts = df[df["isfraud"] == 1]["type"].value_counts().reset_index()
     type_counts.columns = ["Transaction Type", "Fraud Count"]
-
-    fig = px.bar(type_counts, x="Transaction Type", y="Fraud Count",
-                 labels={"Fraud Count": "Number of Fraud Cases"})
-
-    fig = style_fig(fig)
-    st.plotly_chart(fig, use_container_width=True)
-
-# -------------------------------
-# Row 2
-# -------------------------------
-c3, c4 = st.columns(2)
-
-with c3:
-    st.subheader("Amount Distribution")
-
-    sample_df = df["amount"].sample(2000).reset_index()
-    sample_df.columns = ["Index", "Amount"]
-
-    fig = px.line(sample_df, x="Index", y="Amount",labels={"Index": "Transaction Index", "Amount": "Transaction Amount"})
-
-    fig = style_fig(fig)
-    st.plotly_chart(fig, use_container_width=True)
-
-with c4:
-    st.subheader("Fraud by Hour")
-
-    df["hour"] = df["step"] % 24
-    hourly = df.groupby("hour")["isfraud"].sum().reset_index()
-    hourly.columns = ["Hour", "Fraud Count"]
-
-    fig = px.line(hourly, x="Hour", y="Fraud Count",
-                  markers=True,
-                  labels={"Hour": "Hour of Day", "Fraud Count": "Fraud Cases"})
-
-    fig = style_fig(fig)
-    st.plotly_chart(fig, use_container_width=True)
+    fig = px.bar(type_counts, x="Transaction Type", y="Fraud Count")
+    st.plotly_chart(style_fig(fig), width='stretch')
 
 # =====================================================
 # DETECTION
@@ -192,19 +134,22 @@ st.markdown('<div class="section-header">🔍 Fraud Detection</div>', unsafe_all
 
 col_input, col_result = st.columns([1, 1])
 
+def call_api(payload):
+    """Robust API call with retry"""
+    try:
+        return requests.post(API_URL, json=payload, timeout=5)
+    except:
+        st.warning("⏳ Backend is waking up... retrying")
+        time.sleep(8)
+        return requests.post(API_URL, json=payload, timeout=10)
+
 with col_input:
     step = st.number_input("Step", value=1)
-
-    tx_type = st.selectbox(
-        "Transaction Type",
-        ["CASH_OUT", "TRANSFER", "PAYMENT", "DEBIT", "CASH_IN"]
-    )
-
+    tx_type = st.selectbox("Transaction Type",
+                           ["CASH_OUT", "TRANSFER", "PAYMENT", "DEBIT", "CASH_IN"])
     amount = st.number_input("Amount", value=1000.0)
-
     oldbalanceOrg = st.number_input("Old Balance (Sender)", value=0.0)
     newbalanceOrig = st.number_input("New Balance (Sender)", value=0.0)
-
     oldbalanceDest = st.number_input("Old Balance (Receiver)", value=0.0)
     newbalanceDest = st.number_input("New Balance (Receiver)", value=0.0)
 
@@ -225,32 +170,26 @@ with col_result:
             "isFlaggedFraud": 0
         }
 
-        try:
-            response = requests.post(API_URL, json=payload)
+        with st.spinner("Analyzing transaction..."):
+            try:
+                response = call_api(payload)
 
-            if response.status_code == 200:
-                result = response.json()
+                if response.status_code == 200:
+                    result = response.json()
 
-                fraud = result["fraud_prediction"]
-                prob = result["fraud_probability"]
-                reason = result.get("reason", "ML model")
+                    fraud = result["fraud_prediction"]
+                    prob = result["fraud_probability"]
 
-                if fraud == 1:
-                    st.error("🚨 FRAUD DETECTED")
+                    if fraud == 1:
+                        st.error("🚨 FRAUD DETECTED")
+                    else:
+                        st.success("✅ SAFE TRANSACTION")
+
+                    st.metric("Fraud Probability", f"{prob:.2%}")
+                    st.progress(prob)
+
                 else:
-                    st.success("✅ SAFE TRANSACTION")
+                    st.error("API Error: Check backend")
 
-                st.metric("Fraud Probability", f"{prob:.2%}")
-                st.metric("Decision Source", reason)
-
-                st.progress(prob)
-
-            else:
-                st.error("API Error")
-
-        except Exception as e:
-            st.error(f"Connection Error: {e}")
-
-# =====================================================
-# GLOBAL BOX END
-# =====================================================
+            except Exception as e:
+                st.error(f"Connection Error: {e}")
