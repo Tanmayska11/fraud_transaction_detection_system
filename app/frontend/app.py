@@ -26,16 +26,32 @@ engine = create_engine(DB_URL)
 st.set_page_config(page_title="Fraud System", layout="wide")
 
 # =====================================================
-# 🔥 BACKEND WARM-UP (important)
+# 🔥 BACKEND WARM-UP (FIXED)
 # =====================================================
 @st.cache_resource
 def warmup_backend():
-    try:
-        requests.get(API_URL, timeout=5)
-    except:
-        pass
+    max_retries = 10
+    for i in range(max_retries):
+        try:
+            res = requests.get(API_URL, timeout=5)
+            if res.status_code == 200:
+                return True
+        except:
+            pass
+        
+        time.sleep(3)
+    
+    return False
 
-warmup_backend()
+# ✅ RUN WARMUP HERE (CRITICAL)
+with st.spinner("🚀 Starting backend service... please wait"):
+    backend_ready = warmup_backend()
+
+if not backend_ready:
+    st.error("⚠️ Backend failed to start. Please refresh.")
+    st.stop()
+else:
+    st.success("✅ Backend is ready")
 
 # =====================================================
 # 🎨 GLOBAL CSS
@@ -134,14 +150,21 @@ st.markdown('<div class="section-header">🔍 Fraud Detection</div>', unsafe_all
 
 col_input, col_result = st.columns([1, 1])
 
+# ✅ FIXED RETRY LOGIC
 def call_api(payload):
-    """Robust API call with retry"""
-    try:
-        return requests.post(API_URL, json=payload, timeout=5)
-    except:
-        st.warning("⏳ Backend is waking up... retrying")
-        time.sleep(8)
-        return requests.post(API_URL, json=payload, timeout=10)
+    retries = 5
+    for i in range(retries):
+        try:
+            response = requests.post(API_URL, json=payload, timeout=5)
+            if response.status_code == 200:
+                return response
+        except:
+            pass
+        
+        st.warning(f"⏳ Backend waking up... retry {i+1}/{retries}")
+        time.sleep(5)
+    
+    raise Exception("Backend not responding")
 
 with col_input:
     step = st.number_input("Step", value=1)
