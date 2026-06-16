@@ -10,8 +10,8 @@ from src.preprocessing import preprocess_data
 from src.feature_engineering import create_features
 
 
-RAW_TABLE = "transactions_raw"
-PROCESSED_TABLE = "transactions_processed"
+RAW_TABLE = "public.transactions_raw"
+PROCESSED_TABLE = "public.transactions_processed"
 
 
 # =====================================================

@@ -12,7 +12,7 @@ from src.db.db import get_engine
 from src.feature_selection import remove_low_variance, select_by_importance
 from src.config import MODEL_PATH
 
-TABLE_NAME = "transactions_processed"
+TABLE_NAME = "public.transactions_processed"
 FEATURE_PATH = "models/artifacts/features.pkl"
 
 

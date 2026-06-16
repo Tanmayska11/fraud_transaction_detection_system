@@ -1,7 +1,7 @@
 import pandas as pd
 from src.db.db import get_engine
 
-TABLE_NAME = "transactions_raw"
+TABLE_NAME = "public.transactions_raw"
 
 def load_data():
     engine = get_engine()
