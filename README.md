@@ -272,4 +272,10 @@ Master’s in Data Science & Business Analytics
 
 
 ## App link :
+note: please start the backend first.
+
+#Backend
+https://fraud-transaction-detection-system-9fuz.onrender.com/
+
+# Frontend
 https://fraud-transaction-detection-system-1.onrender.com
